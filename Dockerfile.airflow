@@ -1,0 +1,17 @@
+FROM apache/airflow:2.5.1-python3.10
+
+USER root
+RUN apt-get update
+RUN apt-get -y install parallel
+USER airflow 
+
+RUN pip install wtforms \
+         typing_extensions \
+         MarkupSafe \
+         apache-airflow-providers-postgres
+
+COPY scripts /opt/airflow/scripts/
+USER root
+RUN chmod +x /opt/airflow/scripts/init.sh
+USER airflow 
+ENTRYPOINT [ "/opt/airflow/scripts/init.sh" ]

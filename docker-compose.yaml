@@ -1,0 +1,80 @@
+version: "3"
+
+services:
+  postgres:
+    image: postgres:15.2-alpine3.17
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    volumes:
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./sql:/opt/sql
+    ports:
+      - 5432:5432
+    networks:
+      - spark-network
+
+  airflow:
+    build: 
+      context: .
+      dockerfile: Dockerfile.airflow
+    image: airflow-img
+    container_name: airflow
+    ports:
+      - "8081:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./data:/opt/airflow/data
+    networks:
+      - spark-network
+
+  adminer:
+    image: adminer
+    container_name: adminer
+    restart: always
+    ports:
+      - 8082:8080
+    networks:
+      - spark-network
+
+  spark-master:
+    build: 
+      context: .
+      dockerfile: Dockerfile.spark
+    image: spark-master-img
+    container_name: spark_master
+    ports:
+      - "8083:8080"
+    environment:
+      - "SPARK_MODE=master"
+      - "SPARK_MASTER_HOST=spark-master"
+      - "SPARK_MASTER_PORT=7077"
+    networks:
+      - spark-network
+
+  spark-worker:
+    build: 
+      context: .
+      dockerfile: Dockerfile.spark
+    image: spark-worker-img
+    container_name: spark_worker
+    command: python /opt/airflow/src/flask/shell.py
+    ports:
+      - "4000:4000"
+    environment:
+      - "SPARK_MODE=worker"
+      - "SPARK_MASTER_URL=spark://spark-master:7077"
+    volumes:
+      - ./data:/opt/airflow/data
+      - ./src:/opt/airflow/src
+    networks:
+      - spark-network
+
+networks:
+  spark-network:
+    driver: bridge
